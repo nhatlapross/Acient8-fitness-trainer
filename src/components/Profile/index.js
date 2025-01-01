@@ -4,10 +4,10 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Progress } from "@/components/ui/progress";
 import NFTSlider from "./nft-slider"
 import { Dumbbell, Flame, Coins, PersonStanding, PackageOpen } from 'lucide-react'
-import KaiaIcon from "@/asset/icon/KaiaIcon"
 import { useAccount, useBalance, useReadContract } from 'wagmi'
 import { abi } from '@/abi/abi'
 import { Skeleton } from "@/components/ui/skeleton";
+import ETHIcon from "@/asset/icon/ETHIcon";
 
 // Default fallback profile in case no NFT details are available
 const defaultProfile = {
@@ -148,7 +148,7 @@ export default function ProfilePage() {
           <CardContent className="space-y-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-2">
-                <KaiaIcon />
+                <ETHIcon />
                 <Skeleton className="h-4 w-16 bg-gray-400" />
               </div>
               <Skeleton className="h-4 w-20 bg-gray-400" />
@@ -245,8 +245,8 @@ export default function ProfilePage() {
         <CardContent className="space-y-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2">
-              <KaiaIcon />
-              <span>KAIA</span>
+              <ETHIcon />
+              <span>ETH</span>
             </div>
             <span className="font-bold">{myBalance}</span>
           </div>

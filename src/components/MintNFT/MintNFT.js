@@ -9,19 +9,21 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { LoadingAnimation } from "@/components/MintNFT/loading-animation"
 import { ConfettiEffect } from "@/components/MintNFT/confetti-effect"
 import Image from 'next/image'
-import { useAccount, useWriteContract } from 'wagmi'
+import { useAccount, useWriteContract, useWaitForTransactionReceipt } from 'wagmi'
 import { abi } from '@/abi/abi'
 import Link from 'next/link'
+import { useWeb3Modal } from '@web3modal/wagmi/react'
 
 export default function MintNFTPage() {
-  const [isMinting, setIsMinting] = useState(false)
+  // const [isMinting, setIsMinting] = useState(false)
   const [nftName, setNftName] = useState('')
   // const [nftDescription, setNftDescription] = useState('')
   const [mintedNFT, setMintedNFT] = useState(null)
   const [avatarURL, setAvatarURL] = useState(null)
   const [showConfetti, setShowConfetti] = useState(false)
   const { address } = useAccount();
-  const { data: hash, writeContract } = useWriteContract()
+  const { data: hash, writeContract,isPending } = useWriteContract()
+    const { open } = useWeb3Modal();
 
   // Array of avatar image paths
   const avatarImages = [
@@ -40,11 +42,16 @@ export default function MintNFTPage() {
   ];
 
 
+  const { isLoading: isConfirming, isSuccess: isConfirmed } =
+    useWaitForTransactionReceipt({
+      hash,
+    });
+
   const handleMint = async (e) => {
     e.preventDefault();
     setMintedNFT(null);
     setAvatarURL(null);
-    setIsMinting(true);
+    // setIsMinting(true);
 
     // Select a random avatar
     const randomImage = avatarImages[Math.floor(Math.random() * avatarImages.length)];
@@ -61,17 +68,17 @@ export default function MintNFTPage() {
       });
     } catch (error) {
       console.error('Minting failed:', error);
-      setIsMinting(false);
+      // setIsMinting(false);
     }
   };
 
   useEffect(() => {
-    if (hash != null && isMinting) {
+    if (hash != null) {
       // Select a random image
 
       console.log(hash);
       setAvatarURL(mintedNFT.url);
-      setIsMinting(false);
+      // setIsMinting(false);
 
       setShowConfetti(true);
       setTimeout(() => setShowConfetti(false), 5000);
@@ -121,28 +128,49 @@ export default function MintNFTPage() {
           </form>
         </CardContent>
         <CardFooter className="flex flex-col items-center space-y-4">
-          <Button
-            type="submit"
-            onClick={handleMint}
-            disabled={isMinting || !nftName.trim()}
-            className="w-full"
-          >
-            {isMinting ? (
-              <motion.div
+          {address != null ? (
+            <Button
+              type="submit"
+              onClick={handleMint}
+              disabled={isPending || !nftName.trim()}
+              className="w-full"
+            >
+              {isPending ? (
+                <motion.div
+                  className="flex items-center justify-center"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                >
+                  <LoadingAnimation />
+                  <span className="ml-2">Minting...</span>
+                </motion.div>
+              ) : isConfirming?(
+                <motion.div
                 className="flex items-center justify-center"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
               >
                 <LoadingAnimation />
-                <span className="ml-2">Minting...</span>
+                <span className="ml-2">Confirming...</span>
               </motion.div>
-            ) : (
-              'Mint NFT'
-            )}
-          </Button>
+              ):(
+                'Mint NFT'
+              )}
+            </Button>) : (
+              <Button
+                type="submit"
+                onClick={()=>open()}
+                className="w-full"
+              >
+                  Connect wallet
+              </Button>
+            )
+          }
+
           <AnimatePresence>
-            {avatarURL && (
+            {avatarURL && isConfirmed && (
               <motion.div
                 initial={{ opacity: 0, scale: 0.8 }}
                 animate={{ opacity: 1, scale: 1 }}
@@ -171,7 +199,7 @@ export default function MintNFTPage() {
             {hash != null && mintedNFT != null && (
               <div className="mt-4 flex justify-center">
                 <Link
-                  href={`https://kairos.kaiascan.io/tx/${hash}`}
+                  href={`${process.env.NEXT_PUBLIC_CHAIN_SCANER}/tx/${hash}`}
                   target="_blank"
                   rel="noopener noreferrer"
                 >
