@@ -23,7 +23,7 @@ const AdvancedSquatCounter = () => {
   const canvasRef = useRef(null);
   const [correctSquats, setCorrectSquats] = useState(0);
   const [incorrectSquats, setIncorrectSquats] = useState(0);
-  const [feedback, setFeedback] = useState('');
+  const [feedback, setFeedback] = useState('Stand in front of the camera where your full body is visible!');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [hasPermission, setHasPermission] = useState(false);
@@ -38,6 +38,16 @@ const AdvancedSquatCounter = () => {
   const [userNFT, setUserNFT] = useState(null);
   const [dayNFT, setDayNFT] = useState(null);
   const [backgroundOpacity, setBackgroundOpacity] = useState(0.8);
+  const [doing, setDoing] = useState(false);
+
+  useEffect(()=>{
+    setTimeout(() => {
+      setFeedback("Stand in front of the camera where your full body is visible!");
+      setTimeout(() => {
+        setFeedback("Perform squats with proper form to increase your count!")
+      }, 3000);
+    }, 1000);
+  },[isLoading])
 
   // State tracking
   const stateRef = useRef({
@@ -82,6 +92,14 @@ const AdvancedSquatCounter = () => {
       }, 100);
     }
   }, [address]);
+
+  useEffect(() => {
+    console.log(doing);
+    setDoing(true);
+    setTimeout(() => {
+      setDoing(false);
+    }, 3800)
+  }, [incorrectSquats, correctSquats])
 
   useEffect(() => {
 
@@ -581,11 +599,18 @@ const AdvancedSquatCounter = () => {
         </h2>
       </div> */}
 
-      {feedback && (
-        <h2 className={`text-2xl sm:text-3xl font-semibold mb-4 text-center ${feedback.includes('Perfect') ? 'text-green-400' : 'text-yellow-400'}`}>
-          {feedback}
-        </h2>
-      )}
+      {/* {feedback && (
+        <>
+          <img
+            src="/pepeWorkout.gif"
+            alt="Pepe Trainer"
+            className="w-35 h-20"
+          />
+          <h2 className={`text-2xl sm:text-3xl font-semibold mb-4 text-center ${feedback.includes('Perfect') ? 'text-green-400' : 'text-yellow-400'}`}>
+            {feedback}
+          </h2>
+        </>
+      )} */}
 
       {error && (
         <div className="text-red-400 text-lg sm:text-xl mb-4 text-center">
@@ -630,12 +655,45 @@ const AdvancedSquatCounter = () => {
                     Incorrect: {incorrectSquats}
                   </h2>
                 </div>
-                {feedback && (
-                  <h2 className={`text-xl sm:text-2xl font-semibold text-center ${feedback.includes('Perfect') ? 'text-green-400' : 'text-yellow-400'}`}>
-                    {feedback}
-                  </h2>
-                )}
+                {/* {feedback && (
+                  <>
+                    <img
+                      src="/pepeSquat2.gif"
+                      alt="Pepe Trainer"
+                      className="w-25 h-30"
+                    />
+                    <h2 className={`text-xl sm:text-2xl font-semibold text-center ${feedback.includes('Perfect') ? 'text-green-400' : 'text-yellow-400'}`}>
+                      {feedback}
+                    </h2>
+                  </>
+
+                )} */}
               </div>
+              {feedback && (
+                <div className="absolute right-8 top-16 flex items-start gap-4">
+                  <div className="bg-white rounded-lg p-4 shadow-lg">
+                    <p className={`text-lg sm:text-xl font-medium ${feedback.includes('Perfect') ? 'text-green-600' : 'text-yellow-600'
+                      }`}>
+                      {feedback}
+                    </p>
+                  </div>
+                  <div className="w-48">
+                    {doing === true ? (
+                      <img
+                        src="/pepeSquat2.gif"
+                        alt="Pepe Trainer"
+                        className="w-full h-auto"
+                      />
+                    ) : (
+                      <img
+                        src="/pepeSquat2.png"
+                        alt="Pepe Trainer"
+                        className="w-full h-auto"
+                      />
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -687,14 +745,36 @@ const AdvancedSquatCounter = () => {
             </h2>
           </div>
           {feedback && (
-            <h2 className={`text-2xl sm:text-3xl font-semibold mb-4 text-center ${feedback.includes('Perfect') ? 'text-green-400' : 'text-yellow-400'}`}>
-              {feedback}
-            </h2>
+            <div className="relative w-64">
+              <div className="bg-white rounded-lg p-4 shadow-lg">
+                <p className={`text-lg sm:text-xl font-medium ${feedback.includes('Perfect') ? 'text-green-600' : 'text-yellow-600'
+                  }`}>
+                  {feedback}
+                </p>
+              </div>
+              <div className="w-48">
+                {doing === true ? (
+                  <img
+                    src="/pepeSquat2.gif"
+                    alt="Pepe Trainer"
+                    className="w-full h-auto"
+                  />
+                ) : (
+                  <img
+                    src="/pepeSquat2.png"
+                    alt="Pepe Trainer"
+                    className="w-full h-auto"
+                  />
+                )}
+              </div>
+            </div>
           )}
         </>
       )}
 
-      <div className="w-full max-w-[640px] mt-4 px-4">
+
+
+      {/* <div className="w-full max-w-[640px] mt-4 px-4">
         <label className="text-white block mb-2">Background Intensity</label>
         <input
           type="range"
@@ -705,7 +785,7 @@ const AdvancedSquatCounter = () => {
           onChange={(e) => setBackgroundOpacity(parseFloat(e.target.value))}
           className="w-full"
         />
-      </div>
+      </div> */}
 
       {/* Global fullscreen styles */}
       <style jsx global>{`
@@ -720,10 +800,10 @@ const AdvancedSquatCounter = () => {
         }
       `}</style>
 
-      <div className="mt-4 text-gray-300 text-center px-4">
+      {/* <div className="mt-4 text-gray-300 text-center px-4">
         <p className="text-sm sm:text-base">Stand in front of the camera where your full body is visible.</p>
         <p className="text-sm sm:text-base">Perform squats with proper form to increase your count!</p>
-      </div>
+      </div> */}
     </div>
   );
 };

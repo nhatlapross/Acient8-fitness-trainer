@@ -13,6 +13,7 @@ import { useAccount, useWriteContract, useWaitForTransactionReceipt } from 'wagm
 import { abi } from '@/abi/abi'
 import Link from 'next/link'
 import { useWeb3Modal } from '@web3modal/wagmi/react'
+import { useRouter } from 'next/navigation';
 
 export default function MintNFTPage() {
   // const [isMinting, setIsMinting] = useState(false)
@@ -22,8 +23,9 @@ export default function MintNFTPage() {
   const [avatarURL, setAvatarURL] = useState(null)
   const [showConfetti, setShowConfetti] = useState(false)
   const { address } = useAccount();
-  const { data: hash, writeContract,isPending } = useWriteContract()
-    const { open } = useWeb3Modal();
+  const { data: hash, writeContract, isPending } = useWriteContract()
+  const { open } = useWeb3Modal();
+  const router = useRouter();
 
   // Array of avatar image paths
   const avatarImages = [
@@ -145,28 +147,28 @@ export default function MintNFTPage() {
                   <LoadingAnimation />
                   <span className="ml-2">Minting...</span>
                 </motion.div>
-              ) : isConfirming?(
+              ) : isConfirming ? (
                 <motion.div
-                className="flex items-center justify-center"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-              >
-                <LoadingAnimation />
-                <span className="ml-2">Confirming...</span>
-              </motion.div>
-              ):(
+                  className="flex items-center justify-center"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                >
+                  <LoadingAnimation />
+                  <span className="ml-2">Confirming...</span>
+                </motion.div>
+              ) : (
                 'Mint NFT'
               )}
             </Button>) : (
-              <Button
-                type="submit"
-                onClick={()=>open()}
-                className="w-full"
-              >
-                  Connect wallet
-              </Button>
-            )
+            <Button
+              type="submit"
+              onClick={() => open()}
+              className="w-full"
+            >
+              Connect wallet
+            </Button>
+          )
           }
 
           <AnimatePresence>
@@ -207,6 +209,9 @@ export default function MintNFTPage() {
                     View in Explorer
                   </Button>
                 </Link>
+                <Button variant="outline" className="mx-auto ml-2" onClick={() => router.push('/profile')}>
+                  Go to profile
+                </Button>
               </div>
             )}
           </AnimatePresence>
