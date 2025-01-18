@@ -4,6 +4,8 @@ import { CheckCircle, Maximize2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useAccount, useWriteContract } from 'wagmi'
 import { abi } from '@/abi/abi'
+import * as bodyPix from '@tensorflow-models/body-pix';
+import '@tensorflow/tfjs';
 
 // Safely check for browser environment
 const isBrowser = typeof window !== 'undefined';
@@ -21,6 +23,7 @@ const findAngle = (p1, p2, p3) => {
 const AdvancedSquatCounter = () => {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
+  const contextRef = useRef(null);
   const [correctSquats, setCorrectSquats] = useState(0);
   const [incorrectSquats, setIncorrectSquats] = useState(0);
   const [feedback, setFeedback] = useState('Stand in front of the camera where your full body is visible!');
@@ -39,15 +42,66 @@ const AdvancedSquatCounter = () => {
   const [dayNFT, setDayNFT] = useState(null);
   const [backgroundOpacity, setBackgroundOpacity] = useState(0.8);
   const [doing, setDoing] = useState(false);
+  const [backgroundImage, setBackgroundImage] = useState(null);
+  const animationFrameId = useRef(null);
+  const net = useRef(null);
+  const lastFrameTime = useRef(0);
+  const fps = 30; // Target FPS
+  const frameInterval = 1000 / fps;
 
-  useEffect(()=>{
+  useEffect(() => {
     setTimeout(() => {
       setFeedback("Stand in front of the camera where your full body is visible!");
       setTimeout(() => {
         setFeedback("Perform squats with proper form to increase your count!")
       }, 3000);
     }, 1000);
-  },[isLoading])
+  }, [isLoading])
+
+  // Add this useEffect to initialize canvas context
+  useEffect(() => {
+    if (canvasRef.current) {
+      const canvas = canvasRef.current;
+      const context = canvas.getContext('2d', {
+        alpha: false,
+        willReadFrequently: true
+      });
+      contextRef.current = context;
+    }
+  }, []);
+
+  useEffect(() => {
+    // Load the BodyPix model
+    async function loadModel() {
+      try {
+        net.current = await bodyPix.load({
+          architecture: 'MobileNetV1',  // Faster architecture
+          outputStride: 16,            // Balance of speed and accuracy
+          multiplier: 0.5,             // Reduced for speed
+          quantBytes: 2                // Reduced for speed
+        });
+        setIsLoading(false);
+      } catch (error) {
+        console.error('Failed to load BodyPix model:', error);
+      }
+    }
+
+    // Load default background image
+    const defaultImg = new Image();
+    defaultImg.onload = () => {
+      setBackgroundImage(defaultImg);
+    };
+    defaultImg.src = '/room1.png';
+
+    loadModel();
+
+    // Clean up
+    return () => {
+      if (animationFrameId.current) {
+        cancelAnimationFrame(animationFrameId.current);
+      }
+    };
+  }, []);
 
   // State tracking
   const stateRef = useRef({
@@ -122,7 +176,7 @@ const AdvancedSquatCounter = () => {
     }
   }, []);
 
-  // Camera permission request function
+  // Updated requestCameraPermission function
   const requestCameraPermission = async () => {
     if (!isBrowser) return false;
 
@@ -130,13 +184,40 @@ const AdvancedSquatCounter = () => {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           width: { ideal: windowWidth },
-          height: { ideal: Math.floor(windowWidth * 0.75) }
-        }
+          height: { ideal: Math.floor(windowWidth * 0.75) },
+          facingMode: 'user',
+          frameRate: { ideal: fps }
+        },
+        audio: false
       });
 
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
+      if (!videoRef.current || !canvasRef.current) {
+        throw new Error('Video or canvas element not initialized');
       }
+
+      videoRef.current.srcObject = stream;
+
+      // Wait for video metadata to load
+      await new Promise((resolve) => {
+        videoRef.current.onloadedmetadata = () => {
+          resolve();
+        };
+      });
+
+      await videoRef.current.play();
+
+      // Initialize canvas context if not already done
+      if (!contextRef.current && canvasRef.current) {
+        contextRef.current = canvasRef.current.getContext('2d', {
+          alpha: false,
+          willReadFrequently: true
+        });
+      }
+
+      // Set initial canvas dimensions
+      canvasRef.current.width = videoRef.current.videoWidth;
+      canvasRef.current.height = videoRef.current.videoHeight;
+
       setHasPermission(true);
       return true;
     } catch (err) {
@@ -146,6 +227,88 @@ const AdvancedSquatCounter = () => {
       setIsLoading(false);
       return false;
     }
+  };
+
+  // Updated processFrame function with proper canvas checks
+  const processFrame = async () => {
+    const now = performance.now();
+    const elapsed = now - lastFrameTime.current;
+
+    if (elapsed < frameInterval) {
+      animationFrameId.current = requestAnimationFrame(processFrame);
+      return;
+    }
+
+    // Check all required refs and elements
+    if (!net.current || !videoRef.current || !canvasRef.current || !contextRef.current || !backgroundImage) {
+      console.log('Missing required elements:', {
+        net: !!net.current,
+        video: !!videoRef.current,
+        canvas: !!canvasRef.current,
+        context: !!contextRef.current,
+        backgroundImage: !!backgroundImage
+      });
+      animationFrameId.current = requestAnimationFrame(processFrame);
+      return;
+    }
+
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    const ctx = contextRef.current;
+
+    // Check if video is ready
+    if (video.readyState !== 4 || !video.videoWidth || !video.videoHeight) {
+      animationFrameId.current = requestAnimationFrame(processFrame);
+      return;
+    }
+
+    // Ensure canvas dimensions match video dimensions
+    if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+    }
+
+    try {
+      const segmentation = await net.current.segmentPerson(video, {
+        flipHorizontal: true,
+        internalResolution: 'medium',
+        segmentationThreshold: 0.5,
+        maxDetections: 1,
+        scoreThreshold: 0.2,
+        nmsRadius: 20
+      });
+
+      // Draw background
+      ctx.drawImage(backgroundImage, 0, 0, canvas.width, canvas.height);
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const pixel = imageData.data;
+
+      // Draw video frame
+      ctx.drawImage(video, 0, 0);
+      const frameData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+      // Process segmentation mask
+      const personMask = segmentation.data;
+      const dataLength = personMask.length * 4;
+
+      for (let i = 0; i < dataLength; i += 4) {
+        const maskIndex = i / 4;
+        if (personMask[maskIndex]) {
+          pixel[i] = frameData.data[i];
+          pixel[i + 1] = frameData.data[i + 1];
+          pixel[i + 2] = frameData.data[i + 2];
+          pixel[i + 3] = frameData.data[i + 3];
+        }
+      }
+
+      ctx.putImageData(imageData, 0, 0);
+      lastFrameTime.current = now;
+
+    } catch (error) {
+      console.error('Error processing frame:', error);
+    }
+
+    animationFrameId.current = requestAnimationFrame(processFrame);
   };
 
   const getSquatState = (kneeAngle) => {
@@ -179,6 +342,16 @@ const AdvancedSquatCounter = () => {
       }
     }
   };
+
+  const preloadBackgroundImage = () => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = reject;
+      img.src = '/room1.png';
+    });
+  };
+  
 
   const checkSquat = (landmarks) => {
     if (!landmarks) return;
@@ -417,6 +590,11 @@ const AdvancedSquatCounter = () => {
 
     const ctx = canvas.getContext('2d');
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (backgroundImage && backgroundImage.complete) {
+      ctx.drawImage(backgroundImage, 0, 0, canvas.width, canvas.height);
+    } else {
+      console.warn('Background image not ready');
+    }
 
     // Draw landmarks
     for (const landmark of results.poseLandmarks) {
@@ -453,6 +631,7 @@ const AdvancedSquatCounter = () => {
         ctx.stroke();
       }
     }
+
   };
 
   const completeMission = async () => {

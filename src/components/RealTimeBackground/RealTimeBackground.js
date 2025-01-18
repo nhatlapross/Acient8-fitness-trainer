@@ -9,22 +9,32 @@ export default function BackgroundReplacement() {
   const [backgroundImage, setBackgroundImage] = useState(null);
   const animationFrameId = useRef(null);
   const net = useRef(null);
+  const lastFrameTime = useRef(0);
+  const fps = 30; // Target FPS
+  const frameInterval = 1000 / fps;
 
   useEffect(() => {
     // Load the BodyPix model
     async function loadModel() {
       try {
         net.current = await bodyPix.load({
-          architecture: 'MobileNetV1',
-          outputStride: 16,
-          multiplier: 0.75,
-          quantBytes: 2
+          architecture: 'MobileNetV1',  // Faster architecture
+          outputStride: 16,            // Balance of speed and accuracy
+          multiplier: 0.5,             // Reduced for speed
+          quantBytes: 2                // Reduced for speed
         });
         setIsLoading(false);
       } catch (error) {
         console.error('Failed to load BodyPix model:', error);
       }
     }
+
+    // Load default background image
+    const defaultImg = new Image();
+    defaultImg.onload = () => {
+      setBackgroundImage(defaultImg);
+    };
+    defaultImg.src = '/room1.png';
 
     loadModel();
 
@@ -47,7 +57,9 @@ export default function BackgroundReplacement() {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           width: 640,
-          height: 480
+          height: 480,
+          facingMode: 'user',
+          frameRate: { ideal: fps }
         },
         audio: false
       });
@@ -65,45 +77,63 @@ export default function BackgroundReplacement() {
   };
 
   const processFrame = async () => {
-    if (!net.current || !videoRef.current || !canvasRef.current) return;
+    const now = performance.now();
+    const elapsed = now - lastFrameTime.current;
 
-    // Perform segmentation
-    const segmentation = await net.current.segmentPerson(videoRef.current);
+    if (elapsed < frameInterval) {
+      animationFrameId.current = requestAnimationFrame(processFrame);
+      return;
+    }
 
-    const ctx = canvasRef.current.getContext('2d');
-    const { width, height } = canvasRef.current;
+    if (!net.current || !videoRef.current || !canvasRef.current || !backgroundImage) return;
 
-    // Draw the background image or color
-    if (backgroundImage) {
+    try {
+      const segmentation = await net.current.segmentPerson(videoRef.current, {
+        flipHorizontal: true,
+        internalResolution: 'medium',    // Reduced for speed
+        segmentationThreshold: 0.5,      // Keep this for leg detection
+        maxDetections: 1,
+        scoreThreshold: 0.2,
+        nmsRadius: 20
+      });
+
+      const ctx = canvasRef.current.getContext('2d', { 
+        alpha: false,                    // Optimization for non-transparent canvas
+        willReadFrequently: true         // Optimization for frequent pixel manipulation
+      });
+      
+      const { width, height } = canvasRef.current;
+
+      // Draw background
       ctx.drawImage(backgroundImage, 0, 0, width, height);
-    } else {
-      ctx.fillStyle = '#00ff00'; // Default green background
-      ctx.fillRect(0, 0, width, height);
-    }
+      const imageData = ctx.getImageData(0, 0, width, height);
+      const pixel = imageData.data;
 
-    // Draw the person
-    const imageData = ctx.getImageData(0, 0, width, height);
-    const pixel = imageData.data;
-    const personMask = segmentation.data;
+      // Draw video frame
+      ctx.drawImage(videoRef.current, 0, 0);
+      const frameData = ctx.getImageData(0, 0, width, height);
 
-    // Get video frame data
-    ctx.drawImage(videoRef.current, 0, 0);
-    const frameData = ctx.getImageData(0, 0, width, height);
-
-    // Combine person with background
-    for (let i = 0; i < personMask.length; i++) {
-      const n = i * 4;
-      if (personMask[i]) {
-        pixel[n] = frameData.data[n];     // Red
-        pixel[n + 1] = frameData.data[n + 1]; // Green
-        pixel[n + 2] = frameData.data[n + 2]; // Blue
-        pixel[n + 3] = frameData.data[n + 3]; // Alpha
+      // Simplified pixel manipulation for better performance
+      const personMask = segmentation.data;
+      const dataLength = personMask.length * 4;
+      
+      for (let i = 0; i < dataLength; i += 4) {
+        const maskIndex = i / 4;
+        if (personMask[maskIndex]) {
+          pixel[i] = frameData.data[i];
+          pixel[i + 1] = frameData.data[i + 1];
+          pixel[i + 2] = frameData.data[i + 2];
+          pixel[i + 3] = frameData.data[i + 3];
+        }
       }
+
+      ctx.putImageData(imageData, 0, 0);
+      lastFrameTime.current = now;
+      
+    } catch (error) {
+      console.error('Error processing frame:', error);
     }
 
-    ctx.putImageData(imageData, 0, 0);
-
-    // Continue processing frames
     animationFrameId.current = requestAnimationFrame(processFrame);
   };
 
@@ -116,14 +146,14 @@ export default function BackgroundReplacement() {
         img.onload = () => {
           setBackgroundImage(img);
         };
-        img.src = '/blackGround.png';
+        img.src = e.target.result;
       };
       reader.readAsDataURL(file);
     }
   };
 
   return (
-    <div className="min-h-screen p-8 ">
+    <div className="min-h-screen p-8">
       <div className="max-w-4xl mx-auto">
         <h1 className="text-3xl font-bold mb-8">Real-Time Background Replacement</h1>
         
